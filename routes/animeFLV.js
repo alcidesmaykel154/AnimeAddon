@@ -513,13 +513,28 @@ async function GetOnAir() {
 
 async function getBackgroundFromCinemeta(title, type) {
   try {
-    const searchURL = `https://v3-cinemeta.strem.io/catalog/${type}/top/search=${encodeURIComponent(title)}.json`;
+    // Intentar buscar con " Anime" al final para ser más específicos
+    const searchURL = `https://v3-cinemeta.strem.io/catalog/${type}/top/search=${encodeURIComponent(title + " Anime")}.json`;
     const searchResp = await fetch(searchURL);
     if (!searchResp.ok) return null;
-    const searchData = await searchResp.json();
+    let searchData = await searchResp.json();
+
+    // Si no hay resultados, intentar buscar solo por el título original
+    if (!searchData.metas || searchData.metas.length === 0) {
+      const fallbackURL = `https://v3-cinemeta.strem.io/catalog/${type}/top/search=${encodeURIComponent(title)}.json`;
+      const fallbackResp = await fetch(fallbackURL);
+      if (!fallbackResp.ok) return null;
+      searchData = await fallbackResp.json();
+    }
+
     if (!searchData.metas || searchData.metas.length === 0) return null;
 
-    const imdb_id = searchData.metas[0].imdb_id || searchData.metas[0].id;
+    // Filtrar por género "Animation" para evitar live actions (como el de One Piece)
+    const animeMeta = searchData.metas.find(m => m.genres && (m.genres.includes("Animation") || m.genres.includes("Animación")));
+    
+    // Si no encontramos uno con el género explícito, usamos el primero como último recurso
+    const targetMeta = animeMeta || searchData.metas[0];
+    const imdb_id = targetMeta.imdb_id || targetMeta.id;
     if (!imdb_id) return null;
 
     const metaURL = `https://v3-cinemeta.strem.io/meta/${type}/${imdb_id}.json`;
