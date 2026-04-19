@@ -4,6 +4,7 @@ const ANIMEFLV_BASE = "https://www3.animeflv.net"
 const fsPromises = require("fs/promises");
 const cheerio = require("cheerio");
 const streamParser = require("../lib/streamParsing.js");
+const metadataUtils = require("../lib/metadataUtils.js");
 //const vercelBlob = require("@vercel/blob");
 require('dotenv').config()//process.env.var
 
@@ -153,7 +154,7 @@ exports.GetAnimeBySlug = async function (slug) {
     }
 
     const type = (data.data.type === "Pelicula" || data.data.type === "Película" || data.data.type === "Especial" || data.data.type === "movie") ? "movie" : "series";
-    const cinemetaBackground = await getBackgroundFromCinemeta(data.data.title, type);
+    const cinemetaBackground = await metadataUtils.getBackgroundFromCinemeta(data.data.title, type);
 
     return {
       name: data.data.title, alternative_titles: data.data.alternative_titles, type: type,
@@ -508,66 +509,5 @@ async function GetOnAir() {
   } catch (e) {
     console.error("Error on GetOnAir:", e)
     throw e
-  }
-}
-
-async function getBackgroundFromCinemeta(title, type) {
-  try {
-    // 1. Buscar en Cinemeta para obtener el ID de IMDb y TVDB
-    const searchURL = `https://v3-cinemeta.strem.io/catalog/${type}/top/search=${encodeURIComponent(title + " Anime")}.json`;
-    const searchResp = await fetch(searchURL);
-    if (!searchResp.ok) return null;
-    let searchData = await searchResp.json();
-
-    if (!searchData.metas || searchData.metas.length === 0) {
-      const fallbackURL = `https://v3-cinemeta.strem.io/catalog/${type}/top/search=${encodeURIComponent(title)}.json`;
-      const fallbackResp = await fetch(fallbackURL);
-      if (!fallbackResp.ok) return null;
-      searchData = await fallbackResp.json();
-    }
-
-    if (!searchData.metas || searchData.metas.length === 0) return null;
-
-    // 2. Filtrar para encontrar la versión animada (Animation)
-    const animeMeta = searchData.metas.find(m => 
-      m.genres && (m.genres.includes("Animation") || m.genres.includes("Animación"))
-    );
-    
-    const targetMeta = animeMeta || searchData.metas[0];
-    const imdb_id = targetMeta.imdb_id || targetMeta.id;
-    
-    // 3. Intentar obtener el TVDB ID para usar Fanart.tv
-    // Primero necesitamos los metadatos completos para tener el tvdb_id
-    const metaURL = `https://v3-cinemeta.strem.io/meta/${type}/${imdb_id}.json`;
-    const metaResp = await fetch(metaURL);
-    if (!metaResp.ok) return null;
-    const metaData = await metaResp.json();
-    
-    const tvdb_id = metaData.meta.tvdb_id;
-    
-    // 4. Si tenemos TVDB ID, intentamos Fanart.tv (usando una API key pública común)
-    if (tvdb_id) {
-      try {
-        const fanartAPIKey = "70f90761e053a47321e9095655a9f5d1";
-        const fanartURL = `https://webservice.fanart.tv/v3/${type === "movie" ? "movies" : "tv"}/${tvdb_id}?api_key=${fanartAPIKey}`;
-        const fanartResp = await fetch(fanartURL);
-        if (fanartResp.ok) {
-          const fanartData = await fanartResp.json();
-          // Intentar obtener el primer wallpaper o background
-          const backgrounds = fanartData.tvbackground || fanartData.showbackground || fanartData.moviebackground;
-          if (backgrounds && backgrounds.length > 0) {
-            return backgrounds[0].url;
-          }
-        }
-      } catch (fanartError) {
-        console.error("Error fetching from Fanart.tv:", fanartError);
-      }
-    }
-
-    // 5. Fallback a Cinemeta si Fanart falla o no hay tvdb_id
-    return metaData.meta.background || null;
-  } catch (error) {
-    console.error(`Error fetching background for ${title}:`, error);
-    return null;
   }
 }

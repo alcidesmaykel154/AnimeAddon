@@ -3,6 +3,7 @@ const TIOANIME_BASE = "https://tioanime.com"
 const fsPromises = require("fs/promises");
 const cheerio = require("cheerio");
 const streamParser = require("../lib/streamParsing.js");
+const metadataUtils = require("../lib/metadataUtils.js");
 require('dotenv').config()//process.env.var
 
 exports.GetAiringAnimeFromWeb = async function () {
@@ -70,8 +71,7 @@ exports.GetAnimeBySlug = async function (slug) {
   return GetAnimeInfo(slug).then((data) => {
     if (!data) throw Error("Invalid response!")
     return { data }
-  })
-  /*})*/.then((data) => {
+  }).then(async (data) => {
     if (data?.data === undefined) throw Error("Invalid response!")
     //return first result
     const epCount = data.data.episodes.length
@@ -102,9 +102,13 @@ exports.GetAnimeBySlug = async function (slug) {
         available: false //next episode is not available yet
       })
     }
+
+    const type = (data.data.type === "Anime") ? "series" : "movie";
+    const cinemetaBackground = await metadataUtils.getBackgroundFromCinemeta(data.data.title, type);
+
     return {
-      name: data.data.title, alternative_titles: data.data.alternative_titles, type: (data.data.type === "Anime") ? "series" : "movie",
-      videos, poster: data.data.cover, background: `${TIOANIME_BASE}/uploads/animes/thumbs/${matches[1]}.jpg`, genres: data.data.genres, description: data.data.synopsis, website: data.data.url, id: `tioanime:${slug}`,
+      name: data.data.title, alternative_titles: data.data.alternative_titles, type: type,
+      videos, poster: data.data.cover, background: cinemetaBackground || `${TIOANIME_BASE}/uploads/animes/thumbs/${matches[1]}.jpg`, genres: data.data.genres, description: data.data.synopsis, website: data.data.url, id: `tioanime:${slug}`,
       language: "jpn", ...(data.data.related) && {
         links: data.data.related.map((r) => {
           return { name: r.title, category: r.relation, url: `stremio:///detail/series/tioanime:${r.slug}` }

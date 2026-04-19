@@ -3,6 +3,7 @@ const HENAOJARA_BASE = "https://ww1.henaojara.net"
 const fsPromises = require("fs/promises");
 const cheerio = require("cheerio");
 const streamParser = require("../lib/streamParsing.js");
+const metadataUtils = require("../lib/metadataUtils.js");
 //const vercelBlob = require("@vercel/blob");
 require('dotenv').config()//process.env.var
 
@@ -68,7 +69,7 @@ exports.GetAnimeBySlug = async function (slug) {
   return GetAnimeInfo(slug).then((data) => {
     if (!data) throw Error("Invalid response!")
     return { data }
-  }).then((data) => {
+  }).then(async (data) => {
     if (data?.data === undefined) throw Error("Invalid response!")
     //return first result
     const epCount = data.data.episodes.length
@@ -100,9 +101,13 @@ exports.GetAnimeBySlug = async function (slug) {
     if (videos.length === 1 && epCount === 1) { //If only one ep. probably a movie, remove the "Ep. 1" from the title
       videos[0].title = videos[0].title.replace(" Ep. 1", "")
     }
+
+    const type = (data.data.type === "Pelicula" || data.data.type === "Película" || data.data.type === "Especial") ? "movie" : "series";
+    const cinemetaBackground = await metadataUtils.getBackgroundFromCinemeta(data.data.title, type);
+
     return {
-      name: data.data.title, alternative_titles: data.data.alternative_titles, type: (data.data.type === "Pelicula" || data.data.type === "Película" || data.data.type === "Especial") ? "movie" : "series",
-      videos, poster: data.data.cover, background: `${HENAOJARA_BASE}/cdn/img/portada/${data.data.slug}.webp?t=0.1`, genres: data.data.genres, description: data.data.synopsis.replaceAll(/\\n/g,'\n').replaceAll(/\\"/g,'"'), website: data.data.url, id: `henaojara:${slug}`,
+      name: data.data.title, alternative_titles: data.data.alternative_titles, type: type,
+      videos, poster: data.data.cover, background: cinemetaBackground || `${HENAOJARA_BASE}/cdn/img/portada/${data.data.slug}.webp?t=0.1`, genres: data.data.genres, description: data.data.synopsis.replaceAll(/\\n/g,'\n').replaceAll(/\\"/g,'"'), website: data.data.url, id: `henaojara:${slug}`,
       language: "jpn", ...(data.data.related) && {
         links: data.data.related.map((r) => {
           return { name: r.title, category: r.relation, url: `stremio:///detail/series/henaojara:${r.slug}` }
