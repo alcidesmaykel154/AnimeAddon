@@ -120,7 +120,7 @@ exports.GetAnimeBySlug = async function (slug) {
     if (!data) throw Error("Invalid response!")
     return { data }
   })
-  /*})*/.then((data) => {
+  /*})*/.then(async (data) => {
     if (data?.data === undefined) throw Error("Invalid response!")
     //return first result
     const epCount = data.data.episodes.length
